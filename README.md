@@ -2,7 +2,7 @@
 
 # Chronos
 
-**A distributed, durable workflow engine in Go — a focused mini-Temporal for exactly-once, crash-resumable workflows.**
+**A distributed, durable workflow engine in Go, a focused mini-Temporal for exactly-once, crash-resumable workflows.**
 
 [![CI](https://github.com/AymanYouss/chronos-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/AymanYouss/chronos-engine/actions/workflows/ci.yml)
 [![Go](https://img.shields.io/badge/Go-1.26-00ADD8?logo=go&logoColor=white)](https://go.dev)
@@ -18,7 +18,7 @@ Kill a worker mid-flight and the workflow resumes on another with **zero duplica
 Chronos is the durable-execution backbone that long-running jobs and agent systems need. You write ordinary
 Go functions; Chronos makes them **crash-proof**. Every workflow is event-sourced, so a process can die at any
 instant and another worker will deterministically replay its history and continue from exactly where it left
-off — never re-running work that already happened.
+off, never re-running work that already happened.
 
 ![Workflow inspector showing a resumed execution](docs/portfolio/inspector.png)
 
@@ -27,7 +27,7 @@ off — never re-running work that already happened.
 - **Event-sourced durability.** The workflow's event history is the single source of truth. State is never
   checkpointed; it is *derived* by replaying events, so recovery is exact by construction.
 - **Deterministic replay.** A crashed workflow is rebuilt by re-executing its code against history. Completed
-  activities return cached results instead of running again — the core of crash-resume correctness.
+  activities return cached results instead of running again, the core of crash-resume correctness.
 - **Exactly-once activities.** Results are recorded into history exactly once (enforced in Postgres), and an
   idempotency ledger makes side effects safe even under at-least-once dispatch.
 - **Durable timers, retries & backoff.** Timers survive restarts; failed activities retry with exponential
@@ -94,7 +94,7 @@ The script starts the order-fulfillment workflow, waits until it is durably park
 
 - the workflow completes after resuming on a different worker,
 - the idempotency ledger holds **exactly 4** side effects (one per activity), and
-- the history holds **exactly 4** `ActivityTaskCompleted` events — **zero duplicates**.
+- the history holds **exactly 4** `ActivityTaskCompleted` events, **zero duplicates**.
 
 Evidence is written to [`docs/portfolio/demo-evidence.txt`](docs/portfolio/demo-evidence.txt).
 
@@ -127,7 +127,7 @@ event, and a crash at any line resumes at exactly that line.
 
 ## Performance
 
-Deterministic replay is pure CPU work with no I/O — the cost of resuming a workflow. Measured on an Apple M1
+Deterministic replay is pure CPU work with no I/O, the cost of resuming a workflow. Measured on an Apple M1
 Max (`go test -bench BenchmarkReplay`):
 
 ![Replay latency vs history size](docs/portfolio/replay-benchmark.png)

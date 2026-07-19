@@ -264,6 +264,8 @@ func eventDetail(e *commonv1.HistoryEvent) string {
 		return "type=" + a.WorkflowExecutionStarted.WorkflowType
 	case *commonv1.HistoryEvent_ActivityTaskScheduled:
 		return a.ActivityTaskScheduled.ActivityType + " id=" + a.ActivityTaskScheduled.ActivityId
+	case *commonv1.HistoryEvent_ActivityTaskStarted:
+		return fmt.Sprintf("worker=%s attempt=%d", a.ActivityTaskStarted.WorkerIdentity, a.ActivityTaskStarted.Attempt)
 	case *commonv1.HistoryEvent_ActivityTaskCompleted:
 		return fmt.Sprintf("scheduled=%d result=%s", a.ActivityTaskCompleted.ScheduledEventId, truncate(a.ActivityTaskCompleted.Result))
 	case *commonv1.HistoryEvent_ActivityTaskFailed:

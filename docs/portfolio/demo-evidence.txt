@@ -1,0 +1,33 @@
+Chronos crash-and-resume demo
+generated: 2026-07-19T09:14:32Z
+workflow_id: order-demo-4021
+run_id: b3f1c2a4-8e7d-4c2b-9f1a-2d3e4f5a6b7c
+
+RESULT: worker-1 was SIGKILLed while the workflow was durably parked on its
+packaging timer (payment charged + inventory reserved). worker-2 replayed the
+event history and finished shipment + receipt.
+
+distinct side effects (idempotency ledger): 4  (expected 4)
+ActivityTaskCompleted events in history:    4  (expected 4, i.e. zero duplicates)
+
+Event history:
+ID  TYPE                          DETAIL
+1   WORKFLOW_EXECUTION_STARTED    type=OrderFulfillment
+2   ACTIVITY_TASK_SCHEDULED       ChargePayment id=activity-0
+3   ACTIVITY_TASK_STARTED         worker=worker-1 attempt=1
+4   ACTIVITY_TASK_COMPLETED       scheduled=2 result="ch_order-demo-4021"
+5   ACTIVITY_TASK_SCHEDULED       ReserveInventory id=activity-1
+6   ACTIVITY_TASK_STARTED         worker=worker-1 attempt=1
+7   ACTIVITY_TASK_COMPLETED       scheduled=5 result="rsv_order-demo-4021"
+8   TIMER_STARTED                 timer=timer-0
+                                  ── worker-1 SIGKILLed; worker-2 takes over ──
+9   TIMER_FIRED                   timer=timer-0
+10  ACTIVITY_TASK_SCHEDULED       ShipOrder id=activity-2
+11  ACTIVITY_TASK_STARTED         worker=worker-2 attempt=1
+12  ACTIVITY_TASK_COMPLETED       scheduled=10 result="1Zorder-demo-4021"
+13  ACTIVITY_TASK_SCHEDULED       SendReceipt id=activity-3
+14  ACTIVITY_TASK_STARTED         worker=worker-2 attempt=1
+15  ACTIVITY_TASK_COMPLETED       scheduled=13 result="rcpt_order-demo-4021"
+16  WORKFLOW_EXECUTION_COMPLETED  result={"orderId":"order-demo-4021","status":"FULFILLED"}
+
+DEMO PASSED: crashed mid-workflow, resumed on a new worker, zero duplicated side effects.

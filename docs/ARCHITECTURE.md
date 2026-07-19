@@ -9,7 +9,7 @@ Two kinds of code run on Chronos:
 
 - **Workflows** are *deterministic orchestrators*. They decide what happens and in what order, but they may
   not perform side effects directly. Given the same history, a workflow always makes the same decisions.
-- **Activities** are *non-deterministic side effects* — HTTP calls, DB writes, payments. They can do anything,
+- **Activities** are *non-deterministic side effects*, HTTP calls, DB writes, payments. They can do anything,
   and they can fail and be retried.
 
 A running workflow is not a live process holding state in memory. It is an **append-only event history** in
@@ -32,7 +32,7 @@ The history is the single source of truth. `workflow_executions` (status, timing
 the same transaction as the events, and `next_event_id` on that row is both the sequence allocator and the
 optimistic-concurrency token.
 
-## 3. Deterministic replay — the core
+## 3. Deterministic replay, the core
 
 When a worker receives a workflow task, it gets the full history and re-executes the workflow function from
 the top. The trick is what happens at each `ExecuteActivity` / `NewTimer` call:
@@ -46,7 +46,7 @@ the top. The trick is what happens at each `ExecuteActivity` / `NewTimer` call:
    - **Scheduled but not complete** → the `Future` is pending.
    - **Not in history yet** → the engine emits a new `ScheduleActivityTask` **command**.
 3. Calling `Get()` on a pending `Future` cannot make progress this turn, so execution unwinds (via a panic/
-   recover sentinel — a blocked workflow never resumes within the same decision, so there is no goroutine
+   recover sentinel, a blocked workflow never resumes within the same decision, so there is no goroutine
    scheduler to maintain). The commands accumulated so far are the workflow's decision.
 
 Because the mapping from history to commands is pure, **replaying identical history always yields identical
@@ -72,7 +72,7 @@ once**, and **completed activities are never re-dispatched**. Two mechanisms com
    with a visibility timeout. A worker leases a task (`SELECT … FOR UPDATE SKIP LOCKED`), runs it, and reports
    the result. Recording the result appends `ActivityTaskCompleted` **and deletes the queue row in the same
    transaction**, and the completion is only accepted if the caller still holds the lease. A duplicate
-   delivery completed after the original finds no row and is rejected — so exactly one completion event is
+   delivery completed after the original finds no row and is rejected, so exactly one completion event is
    ever written.
 2. **Deterministic replay.** Once an activity is completed in history, replay serves its result from history
    and the workflow never schedules it again.
@@ -86,13 +86,13 @@ NOTHING`. The crash-resume demo asserts the ledger holds exactly one row per act
 
 Both queues are plain Postgres tables, which keeps the whole system to a single stateful dependency:
 
-- `workflow_tasks` — at most one pending task per run (a partial unique index dedupes). Scheduled whenever
+- `workflow_tasks`, at most one pending task per run (a partial unique index dedupes). Scheduled whenever
   history advances (activity completed, timer fired, signal received).
-- `activity_tasks` — one row per scheduled activity, carrying attempt count and retry policy.
+- `activity_tasks`, one row per scheduled activity, carrying attempt count and retry policy.
 
 Polling uses `SELECT … FOR UPDATE SKIP LOCKED`, so any number of workers (and any number of control-plane
 replicas) can poll concurrently without ever handing the same task to two workers. A crashed worker's lease
-simply expires and the task becomes visible again — this is what drives automatic redelivery.
+simply expires and the task becomes visible again, this is what drives automatic redelivery.
 
 ## 6. Durable timers
 
