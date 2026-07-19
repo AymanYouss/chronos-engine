@@ -2,8 +2,9 @@
 /bin/
 *.exe
 *.out
-chronos-server
-chronos-worker
+/chronos-server
+/chronos-worker
+/chronosctl
 
 # Go
 *.test
