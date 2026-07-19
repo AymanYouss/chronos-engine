@@ -1,0 +1,82 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 1,
+  "title": "Chronos Durable Execution",
+  "uid": "chronos-overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-15m", "to": "now" },
+  "refresh": "5s",
+  "templating": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Executions by status",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" } }, "overrides": [] },
+      "options": { "colorMode": "value", "graphMode": "area", "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "targets": [
+        { "expr": "sum by (status) (chronos_executions)", "legendFormat": "{{status}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Workflow throughput (ops/s)",
+      "gridPos": { "h": 6, "w": 16, "x": 8, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 15, "showPoints": "never" } }, "overrides": [] },
+      "targets": [
+        { "expr": "sum(rate(chronos_workflows_started_total[1m]))", "legendFormat": "started", "refId": "A" },
+        { "expr": "sum(rate(chronos_workflows_completed_total[1m]))", "legendFormat": "completed", "refId": "B" },
+        { "expr": "sum(rate(chronos_workflows_failed_total[1m]))", "legendFormat": "failed", "refId": "C" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Activity outcomes (ops/s)",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 6 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 15, "showPoints": "never" } }, "overrides": [] },
+      "targets": [
+        { "expr": "sum(rate(chronos_activities_completed_total[1m]))", "legendFormat": "completed", "refId": "A" },
+        { "expr": "sum(rate(chronos_activities_retried_total[1m]))", "legendFormat": "retried", "refId": "B" },
+        { "expr": "sum(rate(chronos_activities_failed_total[1m]))", "legendFormat": "failed", "refId": "C" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Workflow replay latency (p50 / p95 / p99)",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 6 },
+      "fieldConfig": { "defaults": { "unit": "s", "custom": { "fillOpacity": 10, "showPoints": "never" } }, "overrides": [] },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(chronos_replay_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(chronos_replay_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum(rate(chronos_replay_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p99", "refId": "C" }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Task dispatch rate (ops/s)",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 13 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 15, "showPoints": "never" } }, "overrides": [] },
+      "targets": [
+        { "expr": "sum(rate(chronos_workflow_tasks_polled_total[1m]))", "legendFormat": "workflow tasks", "refId": "A" },
+        { "expr": "sum(rate(chronos_activity_tasks_polled_total[1m]))", "legendFormat": "activity tasks", "refId": "B" }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Durable timers fired (ops/s)",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 13 },
+      "fieldConfig": { "defaults": { "unit": "ops", "custom": { "fillOpacity": 15, "showPoints": "never" } }, "overrides": [] },
+      "targets": [
+        { "expr": "sum(rate(chronos_timers_fired_total[1m]))", "legendFormat": "timers fired", "refId": "A" }
+      ]
+    }
+  ]
+}
