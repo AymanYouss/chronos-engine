@@ -1,0 +1,359 @@
+syntax = "proto3";
+
+package chronos.v1;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+// WorkflowService is the control-plane API for the Chronos durable execution
+// engine. It exposes both the client surface (start / signal / describe
+// workflows) and the worker surface (poll for tasks, report results). Workers
+// are stateless: all durable state lives in the event history persisted by the
+// server.
+service WorkflowService {
+  // --- Client surface -------------------------------------------------------
+
+  // StartWorkflow enqueues a new workflow execution. It is idempotent on
+  // workflow_id: starting an already-running workflow returns the existing run.
+  rpc StartWorkflow(StartWorkflowRequest) returns (StartWorkflowResponse);
+
+  // SignalWorkflow delivers an external signal into a running workflow,
+  // appending a WORKFLOW_EXECUTION_SIGNALED event and scheduling a new
+  // workflow task.
+  rpc SignalWorkflow(SignalWorkflowRequest) returns (SignalWorkflowResponse);
+
+  // DescribeWorkflow returns the current status and metadata of an execution.
+  rpc DescribeWorkflow(DescribeWorkflowRequest) returns (DescribeWorkflowResponse);
+
+  // GetWorkflowHistory returns the full, ordered event history for an execution.
+  rpc GetWorkflowHistory(GetWorkflowHistoryRequest) returns (GetWorkflowHistoryResponse);
+
+  // ListWorkflows returns executions filtered by status, most recent first.
+  rpc ListWorkflows(ListWorkflowsRequest) returns (ListWorkflowsResponse);
+
+  // --- Worker surface -------------------------------------------------------
+
+  // PollWorkflowTask long-polls for the next workflow task on a task queue and
+  // returns the event history the worker must replay to reconstruct state.
+  rpc PollWorkflowTask(PollWorkflowTaskRequest) returns (PollWorkflowTaskResponse);
+
+  // RespondWorkflowTaskCompleted commits the commands a workflow produced
+  // during a single deterministic decision (schedule activities, start timers,
+  // complete the workflow) as new history events, atomically.
+  rpc RespondWorkflowTaskCompleted(RespondWorkflowTaskCompletedRequest) returns (RespondWorkflowTaskCompletedResponse);
+
+  // PollActivityTask long-polls for the next activity task on a task queue.
+  rpc PollActivityTask(PollActivityTaskRequest) returns (PollActivityTaskResponse);
+
+  // RespondActivityTaskCompleted records a successful activity result exactly
+  // once and schedules a workflow task to advance the workflow.
+  rpc RespondActivityTaskCompleted(RespondActivityTaskCompletedRequest) returns (RespondActivityTaskCompletedResponse);
+
+  // RespondActivityTaskFailed records an activity failure; the server applies
+  // the activity's retry policy (backoff) or surfaces a terminal failure.
+  rpc RespondActivityTaskFailed(RespondActivityTaskFailedRequest) returns (RespondActivityTaskFailedResponse);
+
+  // RecordActivityHeartbeat extends the visibility timeout of an in-flight
+  // activity task so long-running activities are not redelivered prematurely.
+  rpc RecordActivityHeartbeat(RecordActivityHeartbeatRequest) returns (RecordActivityHeartbeatResponse);
+}
+
+// WorkflowStatus is the lifecycle state of an execution.
+enum WorkflowStatus {
+  WORKFLOW_STATUS_UNSPECIFIED = 0;
+  WORKFLOW_STATUS_RUNNING = 1;
+  WORKFLOW_STATUS_COMPLETED = 2;
+  WORKFLOW_STATUS_FAILED = 3;
+  WORKFLOW_STATUS_TIMED_OUT = 4;
+  WORKFLOW_STATUS_TERMINATED = 5;
+}
+
+// EventType enumerates every kind of event that can appear in a history. The
+// history is the single source of truth; replaying it deterministically
+// reconstructs workflow state after any crash.
+enum EventType {
+  EVENT_TYPE_UNSPECIFIED = 0;
+  EVENT_TYPE_WORKFLOW_EXECUTION_STARTED = 1;
+  EVENT_TYPE_WORKFLOW_TASK_SCHEDULED = 2;
+  EVENT_TYPE_WORKFLOW_TASK_STARTED = 3;
+  EVENT_TYPE_WORKFLOW_TASK_COMPLETED = 4;
+  EVENT_TYPE_ACTIVITY_TASK_SCHEDULED = 5;
+  EVENT_TYPE_ACTIVITY_TASK_STARTED = 6;
+  EVENT_TYPE_ACTIVITY_TASK_COMPLETED = 7;
+  EVENT_TYPE_ACTIVITY_TASK_FAILED = 8;
+  EVENT_TYPE_ACTIVITY_TASK_RETRY_SCHEDULED = 9;
+  EVENT_TYPE_TIMER_STARTED = 10;
+  EVENT_TYPE_TIMER_FIRED = 11;
+  EVENT_TYPE_WORKFLOW_EXECUTION_SIGNALED = 12;
+  EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED = 13;
+  EVENT_TYPE_WORKFLOW_EXECUTION_FAILED = 14;
+}
+
+// HistoryEvent is one immutable, append-only record in a workflow's history.
+// event_id is a per-workflow monotonically increasing sequence number.
+message HistoryEvent {
+  int64 event_id = 1;
+  EventType event_type = 2;
+  google.protobuf.Timestamp event_time = 3;
+
+  oneof attributes {
+    WorkflowExecutionStartedAttributes workflow_execution_started = 10;
+    ActivityTaskScheduledAttributes activity_task_scheduled = 11;
+    ActivityTaskStartedAttributes activity_task_started = 12;
+    ActivityTaskCompletedAttributes activity_task_completed = 13;
+    ActivityTaskFailedAttributes activity_task_failed = 14;
+    ActivityTaskRetryScheduledAttributes activity_task_retry_scheduled = 15;
+    TimerStartedAttributes timer_started = 16;
+    TimerFiredAttributes timer_fired = 17;
+    WorkflowExecutionSignaledAttributes workflow_execution_signaled = 18;
+    WorkflowExecutionCompletedAttributes workflow_execution_completed = 19;
+    WorkflowExecutionFailedAttributes workflow_execution_failed = 20;
+  }
+}
+
+message WorkflowExecutionStartedAttributes {
+  string workflow_type = 1;
+  string task_queue = 2;
+  bytes input = 3;
+  RetryPolicy retry_policy = 4;
+  google.protobuf.Duration workflow_execution_timeout = 5;
+}
+
+message ActivityTaskScheduledAttributes {
+  string activity_id = 1;
+  string activity_type = 2;
+  string task_queue = 3;
+  bytes input = 4;
+  RetryPolicy retry_policy = 5;
+  google.protobuf.Duration start_to_close_timeout = 6;
+  int32 attempt = 7;
+}
+
+message ActivityTaskStartedAttributes {
+  int64 scheduled_event_id = 1;
+  string worker_identity = 2;
+  int32 attempt = 3;
+}
+
+message ActivityTaskCompletedAttributes {
+  int64 scheduled_event_id = 1;
+  bytes result = 2;
+}
+
+message ActivityTaskFailedAttributes {
+  int64 scheduled_event_id = 1;
+  Failure failure = 2;
+  bool retryable = 3;
+}
+
+message ActivityTaskRetryScheduledAttributes {
+  int64 scheduled_event_id = 1;
+  int32 attempt = 2;
+  google.protobuf.Timestamp next_attempt_time = 3;
+  Failure failure = 4;
+}
+
+message TimerStartedAttributes {
+  string timer_id = 1;
+  google.protobuf.Duration start_to_fire_timeout = 2;
+  google.protobuf.Timestamp fire_time = 3;
+}
+
+message TimerFiredAttributes {
+  string timer_id = 1;
+  int64 started_event_id = 2;
+}
+
+message WorkflowExecutionSignaledAttributes {
+  string signal_name = 1;
+  bytes input = 2;
+}
+
+message WorkflowExecutionCompletedAttributes {
+  bytes result = 1;
+}
+
+message WorkflowExecutionFailedAttributes {
+  Failure failure = 1;
+}
+
+// RetryPolicy controls exponential backoff for activities and workflows.
+message RetryPolicy {
+  google.protobuf.Duration initial_interval = 1;
+  double backoff_coefficient = 2;
+  google.protobuf.Duration max_interval = 3;
+  int32 max_attempts = 4;
+}
+
+// Failure carries a structured error across the wire and into history.
+message Failure {
+  string message = 1;
+  string type = 2;
+  string stack_trace = 3;
+}
+
+// Command is a decision produced by a workflow during one workflow task. The
+// server validates commands against history and turns them into new events
+// atomically, which is what makes replay deterministic.
+message Command {
+  oneof attributes {
+    ScheduleActivityTaskCommand schedule_activity_task = 1;
+    StartTimerCommand start_timer = 2;
+    CompleteWorkflowExecutionCommand complete_workflow_execution = 3;
+    FailWorkflowExecutionCommand fail_workflow_execution = 4;
+  }
+}
+
+message ScheduleActivityTaskCommand {
+  string activity_id = 1;
+  string activity_type = 2;
+  string task_queue = 3;
+  bytes input = 4;
+  RetryPolicy retry_policy = 5;
+  google.protobuf.Duration start_to_close_timeout = 6;
+}
+
+message StartTimerCommand {
+  string timer_id = 1;
+  google.protobuf.Duration start_to_fire_timeout = 2;
+}
+
+message CompleteWorkflowExecutionCommand {
+  bytes result = 1;
+}
+
+message FailWorkflowExecutionCommand {
+  Failure failure = 1;
+}
+
+// --- Client messages --------------------------------------------------------
+
+message WorkflowExecution {
+  string workflow_id = 1;
+  string run_id = 2;
+  string workflow_type = 3;
+  string task_queue = 4;
+  WorkflowStatus status = 5;
+  google.protobuf.Timestamp start_time = 6;
+  google.protobuf.Timestamp close_time = 7;
+  int64 history_length = 8;
+}
+
+message StartWorkflowRequest {
+  string workflow_id = 1;
+  string workflow_type = 2;
+  string task_queue = 3;
+  bytes input = 4;
+  RetryPolicy retry_policy = 5;
+  google.protobuf.Duration workflow_execution_timeout = 6;
+}
+
+message StartWorkflowResponse {
+  string workflow_id = 1;
+  string run_id = 2;
+  bool already_started = 3;
+}
+
+message SignalWorkflowRequest {
+  string workflow_id = 1;
+  string run_id = 2;
+  string signal_name = 3;
+  bytes input = 4;
+}
+
+message SignalWorkflowResponse {}
+
+message DescribeWorkflowRequest {
+  string workflow_id = 1;
+  string run_id = 2;
+}
+
+message DescribeWorkflowResponse {
+  WorkflowExecution execution = 1;
+}
+
+message GetWorkflowHistoryRequest {
+  string workflow_id = 1;
+  string run_id = 2;
+}
+
+message GetWorkflowHistoryResponse {
+  repeated HistoryEvent events = 1;
+}
+
+message ListWorkflowsRequest {
+  WorkflowStatus status_filter = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListWorkflowsResponse {
+  repeated WorkflowExecution executions = 1;
+  string next_page_token = 2;
+}
+
+// --- Worker messages --------------------------------------------------------
+
+message PollWorkflowTaskRequest {
+  string task_queue = 1;
+  string identity = 2;
+}
+
+message PollWorkflowTaskResponse {
+  string workflow_id = 1;
+  string run_id = 2;
+  string workflow_type = 3;
+  int64 task_token = 4;
+  repeated HistoryEvent history = 5;
+  int64 started_event_id = 6;
+}
+
+message RespondWorkflowTaskCompletedRequest {
+  int64 task_token = 1;
+  string identity = 2;
+  repeated Command commands = 3;
+}
+
+message RespondWorkflowTaskCompletedResponse {}
+
+message PollActivityTaskRequest {
+  string task_queue = 1;
+  string identity = 2;
+}
+
+message PollActivityTaskResponse {
+  string workflow_id = 1;
+  string run_id = 2;
+  string activity_id = 3;
+  string activity_type = 4;
+  int64 task_token = 5;
+  bytes input = 6;
+  int32 attempt = 7;
+  int64 scheduled_event_id = 8;
+}
+
+message RespondActivityTaskCompletedRequest {
+  int64 task_token = 1;
+  string identity = 2;
+  bytes result = 3;
+}
+
+message RespondActivityTaskCompletedResponse {}
+
+message RespondActivityTaskFailedRequest {
+  int64 task_token = 1;
+  string identity = 2;
+  Failure failure = 3;
+  bool retryable = 4;
+}
+
+message RespondActivityTaskFailedResponse {}
+
+message RecordActivityHeartbeatRequest {
+  int64 task_token = 1;
+  bytes details = 2;
+}
+
+message RecordActivityHeartbeatResponse {
+  bool cancel_requested = 1;
+}

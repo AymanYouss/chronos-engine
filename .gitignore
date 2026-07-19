@@ -1,0 +1,35 @@
+# Binaries
+/bin/
+*.exe
+*.out
+chronos-server
+chronos-worker
+
+# Go
+*.test
+*.prof
+coverage.out
+coverage.html
+
+# Env / secrets
+.env
+.env.local
+*.pem
+*.key
+
+# Node / web
+web/node_modules/
+web/dist/
+web/.vite/
+
+# Editor
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Terraform
+deploy/aws/.terraform/
+deploy/aws/*.tfstate
+deploy/aws/*.tfstate.backup
+deploy/aws/.terraform.lock.hcl
