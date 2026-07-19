@@ -331,8 +331,9 @@ func (s *Store) CompleteActivityTask(ctx context.Context, token int64, identity 
 // task with exponential backoff (recording ACTIVITY_TASK_RETRY_SCHEDULED) or,
 // once retries are exhausted, records a terminal ACTIVITY_TASK_FAILED and lets
 // the workflow observe the failure.
-func (s *Store) FailActivityTask(ctx context.Context, token int64, identity string, failure *commonv1.Failure, retryable bool) error {
-	return pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+func (s *Store) FailActivityTask(ctx context.Context, token int64, identity string, failure *commonv1.Failure, retryable bool) (bool, error) {
+	retried := false
+	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
 		var (
 			workflowID       string
 			runID            string
@@ -379,13 +380,16 @@ func (s *Store) FailActivityTask(ctx context.Context, token int64, identity stri
 			if _, err := appendEvents(ctx, tx, workflowID, runID, ev); err != nil {
 				return err
 			}
-			_, err := tx.Exec(ctx,
+			if _, err := tx.Exec(ctx,
 				`UPDATE activity_tasks
 				 SET attempt = $2, visible_at = $3, locked_until = NULL, locked_by = NULL
 				 WHERE task_id = $1`,
 				token, next, nextTime,
-			)
-			return err
+			); err != nil {
+				return err
+			}
+			retried = true
+			return nil
 		}
 
 		ev := event(commonv1.EventType_EVENT_TYPE_ACTIVITY_TASK_FAILED)
@@ -404,6 +408,7 @@ func (s *Store) FailActivityTask(ctx context.Context, token int64, identity stri
 		}
 		return scheduleWorkflowTaskForRun(ctx, tx, workflowID, runID)
 	})
+	return retried, err
 }
 
 // ExtendActivityLease pushes out the visibility timeout for an in-flight
