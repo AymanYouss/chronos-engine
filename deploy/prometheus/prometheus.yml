@@ -1,0 +1,20 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: chronos-server
+    static_configs:
+      - targets: ["server:9090"]
+        labels:
+          component: control-plane
+
+  - job_name: chronos-worker
+    dns_sd_configs:
+      - names: ["worker"]
+        type: A
+        port: 9091
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        target_label: component
+        replacement: worker

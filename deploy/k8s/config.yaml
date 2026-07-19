@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chronos-config
+  namespace: chronos
+data:
+  CHRONOS_GRPC_ADDR: ":7233"
+  CHRONOS_HTTP_ADDR: ":8080"
+  CHRONOS_METRICS_ADDR: ":9090"
+  CHRONOS_TASK_LEASE: "30s"
+  CHRONOS_TIMER_INTERVAL: "1s"
+  CHRONOS_TASK_QUEUE: "default"
+  CHRONOS_WORKER_CONCURRENCY: "16"
+  CHRONOS_SERVER: "chronos-server:7233"
+---
+# The database URL points at the managed RDS instance provisioned by
+# deploy/aws. Populate it out-of-band, e.g.:
+#   kubectl -n chronos create secret generic chronos-db \
+#     --from-literal=CHRONOS_DATABASE_URL="postgres://chronos:PASS@<rds-endpoint>:5432/chronos?sslmode=require"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: chronos-db
+  namespace: chronos
+type: Opaque
+stringData:
+  CHRONOS_DATABASE_URL: "postgres://chronos:chronos@chronos-postgres:5432/chronos?sslmode=disable"
