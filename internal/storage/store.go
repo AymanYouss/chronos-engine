@@ -70,7 +70,9 @@ type Store interface {
 	CompleteWorkflowTask(ctx context.Context, token int64, identity string, commands []*commonv1.Command) error
 	PollActivityTask(ctx context.Context, taskQueue, identity string, lease time.Duration) (*core.ActivityTask, error)
 	CompleteActivityTask(ctx context.Context, token int64, identity string, result []byte) error
-	FailActivityTask(ctx context.Context, token int64, identity string, failure *commonv1.Failure, retryable bool) error
+	// FailActivityTask records an activity failure and reports whether the
+	// activity was rescheduled for retry (true) or failed terminally (false).
+	FailActivityTask(ctx context.Context, token int64, identity string, failure *commonv1.Failure, retryable bool) (retried bool, err error)
 	ExtendActivityLease(ctx context.Context, token int64, lease time.Duration) (bool, error)
 
 	// --- Background services ---
