@@ -1,7 +1,8 @@
 # syntax=docker/dockerfile:1
 
 # --- build stage ---------------------------------------------------------------
-FROM node:22-alpine AS build
+# Debian-based (glibc) so esbuild's native binary installs cleanly.
+FROM node:22-slim AS build
 WORKDIR /app
 
 RUN corepack enable
