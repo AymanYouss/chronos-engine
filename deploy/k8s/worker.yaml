@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chronos-worker
+  namespace: chronos
+  labels:
+    app.kubernetes.io/name: chronos-worker
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: chronos-worker
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: chronos-worker
+        app.kubernetes.io/component: worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9091"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: worker
+          image: ghcr.io/aymanyouss/chronos-engine:latest
+          imagePullPolicy: IfNotPresent
+          command: ["/usr/local/bin/chronos-worker"]
+          ports:
+            - { name: metrics, containerPort: 9091 }
+          env:
+            - name: CHRONOS_METRICS_ADDR
+              value: ":9091"
+            - name: CHRONOS_WORKER_IDENTITY
+              valueFrom:
+                fieldRef: { fieldPath: metadata.name }
+          envFrom:
+            - configMapRef: { name: chronos-config }
+            - secretRef: { name: chronos-db }
+          readinessProbe:
+            httpGet: { path: /healthz, port: metrics }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            requests: { cpu: "250m", memory: "128Mi" }
+            limits: { cpu: "2", memory: "512Mi" }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+---
+# Scale workers on CPU; the durable Postgres task queues let any number of
+# workers pull safely, so horizontal scaling is linear until the DB saturates.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: chronos-worker
+  namespace: chronos
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: chronos-worker
+  minReplicas: 3
+  maxReplicas: 30
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65

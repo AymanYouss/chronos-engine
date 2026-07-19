@@ -1,0 +1,20 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: chronos
+
+resources:
+  - namespace.yaml
+  - config.yaml
+  - server.yaml
+  - worker.yaml
+  - web.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: chronos
+
+images:
+  - name: ghcr.io/aymanyouss/chronos-engine
+    newTag: latest
+  - name: ghcr.io/aymanyouss/chronos-engine-web
+    newTag: latest
