@@ -270,6 +270,36 @@ func (s *Store) PollActivityTask(ctx context.Context, taskQueue, identity string
 			return err
 		}
 
+		// Record an ACTIVITY_TASK_STARTED event once per attempt so the inspector
+		// timeline shows which worker ran each attempt (this is what makes the
+		// "resumed on a different worker" story visible), while a lease-expiry
+		// redelivery of the same attempt does not duplicate the event.
+		var lastStarted int32
+		if err := tx.QueryRow(ctx,
+			`SELECT last_started_attempt FROM activity_tasks WHERE task_id = $1`, taskID,
+		).Scan(&lastStarted); err != nil {
+			return err
+		}
+		if attempt > lastStarted {
+			ev := event(commonv1.EventType_EVENT_TYPE_ACTIVITY_TASK_STARTED)
+			ev.Attributes = &commonv1.HistoryEvent_ActivityTaskStarted{
+				ActivityTaskStarted: &commonv1.ActivityTaskStartedAttributes{
+					ScheduledEventId: scheduledEventID,
+					WorkerIdentity:   identity,
+					Attempt:          attempt,
+				},
+			}
+			if _, err := appendEvents(ctx, tx, workflowID, runID, ev); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx,
+				`UPDATE activity_tasks SET last_started_attempt = $2 WHERE task_id = $1`,
+				taskID, attempt,
+			); err != nil {
+				return err
+			}
+		}
+
 		task = &core.ActivityTask{
 			TaskToken:        taskID,
 			WorkflowID:       workflowID,

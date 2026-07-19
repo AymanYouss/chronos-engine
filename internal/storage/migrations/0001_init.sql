@@ -79,6 +79,9 @@ CREATE TABLE IF NOT EXISTS activity_tasks (
     input              BYTEA,
     retry_policy       BYTEA,
     attempt            INT         NOT NULL DEFAULT 1,
+    -- Highest attempt for which an ACTIVITY_TASK_STARTED event was recorded, so
+    -- a lease-expiry redelivery of the same attempt does not duplicate it.
+    last_started_attempt INT       NOT NULL DEFAULT 0,
     visible_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
     locked_until       TIMESTAMPTZ,
     locked_by          TEXT,
